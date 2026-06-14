@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>財政ナビ-AIひろこ先生｜自治体財政ヘルスチェック</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f4f0; --surface: #ffffff; --border: #e2e0d8;
+    --text: #1a1a1a; --muted: #6b6b6b; --accent: #1a5276;
+    --meguro: #e8473f; --good: #117a65; --warn: #c0392b;
+    --chat-bg: #f0f4f8; --highlight: rgba(232,71,63,0.12);
+  }
+  body { font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  .header { background: var(--accent); color: white; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .header-logo { width: 30px; height: 30px; background: var(--meguro); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+  .header-title { font-size: 14px; font-weight: 700; }
+  .header-sub { font-size: 10px; opacity: 0.7; }
+  .header-badge { margin-left: auto; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); padding: 3px 10px; border-radius: 20px; font-size: 10px; }
+  .layout { display: grid; grid-template-columns: 1fr 320px; flex: 1; overflow: hidden; }
+  .dashboard { padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .layer-tabs { display: flex; gap: 6px; }
+  .layer-tab { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1.5px solid var(--border); background: white; color: var(--muted); transition: all 0.2s; }
+  .layer-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .card:last-child { margin-bottom: 0; }
+  .card-title { font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 10px; }
+  .bar-chart { display: flex; flex-direction: column; gap: 6px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; padding: 3px 5px; border-radius: 4px; transition: background 0.2s; }
+  .bar-row.hl { background: var(--highlight); }
+  .bar-label { width: 58px; font-size: 10px; flex-shrink: 0; }
+  .bar-row.hl .bar-label { font-weight: 700; color: var(--meguro); }
+  .bar-track { flex: 1; height: 16px; background: #eee; border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; display: flex; align-items: center; justify-content: flex-end; padding-right: 4px; transition: width 0.5s ease; }
+  .bar-fill span { font-size: 9px; color: white; font-weight: 600; }
+  .bar-rank { width: 20px; font-size: 9px; color: var(--muted); text-align: right; flex-shrink: 0; }
+  .metrics-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+  .metric-box { background: var(--bg); border-radius: 6px; padding: 10px; text-align: center; }
+  .metric-val { font-size: 17px; font-weight: 700; color: var(--accent); }
+  .metric-val.g { color: var(--good); }
+  .metric-val.w { color: var(--warn); }
+  .metric-lbl { font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .chat-panel { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+  .chat-head { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .avatar { width: 32px; height: 32px; background: linear-gradient(135deg, var(--meguro), #a93226); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .chat-name { font-size: 12px; font-weight: 700; }
+  .chat-status { font-size: 9px; color: var(--good); display: flex; align-items: center; gap: 3px; }
+  .sdot { width: 5px; height: 5px; background: var(--good); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+  .chat-msgs { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { display: flex; flex-direction: column; }
+  .msg.u { align-items: flex-end; }
+  .msg.a { align-items: flex-start; }
+  .bubble { max-width: 88%; padding: 7px 10px; border-radius: 10px; font-size: 11px; line-height: 1.6; }
+  .msg.u .bubble { background: var(--accent); color: white; border-bottom-right-radius: 2px; }
+  .msg.a .bubble { background: var(--chat-bg); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+  .msg-who { font-size: 9px; color: var(--muted); margin-top: 2px; padding: 0 2px; }
+  .hl-note { font-size: 9px; color: var(--meguro); font-weight: 600; background: var(--highlight); padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 3px; }
+  .typing { display: flex; gap: 3px; align-items: center; padding: 2px 0; }
+  .tdot { width: 5px; height: 5px; background: var(--muted); border-radius: 50%; animation: td 1.2s infinite; }
+  .tdot:nth-child(2){animation-delay:.2s}.tdot:nth-child(3){animation-delay:.4s}
+  @keyframes td{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
+  .chips { padding: 6px 10px; display: flex; flex-wrap: wrap; gap: 4px; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .chip { padding: 4px 9px; background: #eaf2ff; color: var(--accent); border-radius: 20px; font-size: 10px; cursor: pointer; border: 1px solid #c8dcf5; transition: all 0.15s; white-space: nowrap; }
+  .chip:hover { background: var(--accent); color: white; }
+  .input-area { padding: 8px 10px; border-top: 1px solid var(--border); display: flex; gap: 6px; flex-shrink: 0; }
+  .chat-input { flex: 1; padding: 7px 10px; border: 1.5px solid var(--border); border-radius: 20px; font-size: 11px; outline: none; transition: border 0.2s; font-family: inherit; }
+  .chat-input:focus { border-color: var(--accent); }
+  .send-btn { width: 32px; height: 32px; background: var(--accent); border: none; border-radius: 50%; cursor: pointer; color: white; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .send-btn:hover { background: #154360; }
+  .send-btn:disabled { background: #bbb; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-logo">目</div>
+  <div><div class="header-title">自治体財政ヘルスチェック</div><div class="header-sub">23区 財政健康診断ダッシュボード（デモ版）</div></div>
+  <div class="header-badge">🤖 財政ナビ-AIひろこ先生</div>
+</div>
+
+<div class="layout">
+  <div class="dashboard">
+    <div class="layer-tabs">
+      <div class="layer-tab active" onclick="switchLayer(1,this)">Layer 1　横比較</div>
+      <div class="layer-tab" onclick="switchLayer(2,this)">Layer 2　縦比較</div>
+      <div class="layer-tab" onclick="switchLayer(3,this)">Layer 3　ABC</div>
+    </div>
+
+    <div id="L1">
+      <div class="card">
+        <div class="card-title">🏦 財政健全度指数・基金負債バランス（23区比較・ダミーデータ）</div>
+        <div class="bar-chart" id="kenzen"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">💰 基金残高 vs 区債残高（23区比較・ダミーデータ）</div>
+        <div class="bar-chart" id="kikin"></div>
+      </div>
+    </div>
+
+    <div id="L2" style="display:none">
+      <div class="card">
+        <div class="card-title">📈 目黒区　将来の税金（1人あたり）推移　吉田方式</div>
+        <svg id="trend" viewBox="0 0 400 110" style="width:100%;height:110px"></svg>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);padding:2px 8px 0">
+          <span>2016</span><span>2017</span><span>2018</span><span>2019</span><span>2020</span><span>2021</span><span>2022</span><span>2023</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🏛️ 首長評価サマリー（就任時比較）</div>
+        <div class="metrics-grid">
+          <div class="metric-box"><div class="metric-val g">▼12%</div><div class="metric-lbl">将来税金変化</div></div>
+          <div class="metric-box"><div class="metric-val w">5年連続</div><div class="metric-lbl">PB赤字</div></div>
+          <div class="metric-box"><div class="metric-val">989億</div><div class="metric-lbl">積立基金残高</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 基金・区債シミュレーター予測（ダミーデータ）</div>
+        <svg id="sim" viewBox="0 0 400 110" style="width:100%;height:110px"></svg>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);padding:2px 8px 0">
+          <span>2026</span><span>2027</span><span>2028</span><span>2029</span><span>2030</span><span>2031</span><span>2032</span><span>2033</span><span>2034</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="L3" style="display:none">
+      <div class="card">
+        <div class="card-title">📚 行政サービス別　1人あたり年間フルコスト（23区比較・ダミーデータ）</div>
+        <div class="bar-chart" id="gakudo"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">⚖️ サービス別　コスト効率マトリクス</div>
+        <svg id="matrix" viewBox="0 0 300 180" style="width:100%;height:150px"></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-panel">
+    <div class="chat-head">
+      <div class="avatar">ひ</div>
+      <div>
+        <div class="chat-name">財政ナビ-AIひろこ先生</div>
+        <div class="chat-status"><span class="sdot"></span>365日 財政説明会 開催中</div>
+      </div>
+    </div>
+    <div class="chat-msgs" id="msgs">
+      <div class="msg a">
+        <div class="bubble">こんにちは！財政ナビ-AIひろこ先生です👋<br><br>目黒区をはじめ23区の財政データをもとに、いつでも財政の質問にお答えします。<br><br>気になることを何でも聞いてください📊</div>
+        <div class="msg-who">財政ナビ-AIひろこ先生</div>
+      </div>
+    </div>
+    <div class="chips">
+      <div class="chip" onclick="ask(this)">目黒区の財政は健全？</div>
+      <div class="chip" onclick="ask(this)">将来の税金は増えてる？</div>
+      <div class="chip" onclick="ask(this)">学童保育のコストは？</div>
+      <div class="chip" onclick="ask(this)">貯金が底をつくのはいつ？</div>
+      <div class="chip" onclick="ask(this)">区長の評価は？</div>
+    </div>
+    <div class="input-area">
+      <input class="chat-input" id="inp" placeholder="財政について質問する…" onkeydown="if(event.key==='Enter')send()">
+      <button class="send-btn" id="sbtn" onclick="send()">↑</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const kenzenData = [
+  {n:"文京区",v:92,c:"#95a5a6"},{n:"目黒区",v:88,c:"#e8473f"},{n:"港区",v:95,c:"#95a5a6"},
+  {n:"渋谷区",v:85,c:"#95a5a6"},{n:"世田谷区",v:78,c:"#95a5a6"},{n:"品川区",v:72,c:"#95a5a6"},
+  {n:"新宿区",v:68,c:"#95a5a6"},{n:"大田区",v:65,c:"#95a5a6"},{n:"台東区",v:61,c:"#95a5a6"}
+];
+const kikinData = [
+  {n:"港区",v:120,c:"#95a5a6"},{n:"目黒区",v:89,c:"#e8473f"},{n:"文京区",v:75,c:"#95a5a6"},
+  {n:"渋谷区",v:68,c:"#95a5a6"},{n:"世田谷区",v:52,c:"#95a5a6"},{n:"品川区",v:45,c:"#95a5a6"},
+  {n:"新宿区",v:38,c:"#95a5a6"},{n:"大田区",v:31,c:"#95a5a6"}
+];
+const gakudoData = [
+  {n:"渋谷区",v:67,c:"#95a5a6"},{n:"目黒区",v:63,c:"#e8473f"},{n:"港区",v:61,c:"#95a5a6"},
+  {n:"世田谷区",v:59,c:"#95a5a6"},{n:"文京区",v:57,c:"#95a5a6"},{n:"品川区",v:55,c:"#95a5a6"},
+  {n:"中央区",v:52,c:"#95a5a6"},{n:"大田区",v:46,c:"#95a5a6"},{n:"新宿区",v:44,c:"#95a5a6"}
+];
+
+function renderBar(id, data, unit="") {
+  const el = document.getElementById(id);
+  const max = Math.max(...data.map(d=>d.v)) * 1.1;
+  const sorted = [...data].sort((a,b)=>b.v-a.v);
+  el.innerHTML = sorted.map((d,i)=>`
+    <div class="bar-row ${d.c==='#e8473f'?'hl':''}">
+      <span class="bar-label">${d.n}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${d.v/max*100}%;background:${d.c}"><span>${d.v}${unit}</span></div></div>
+      <span class="bar-rank">${i+1}位</span>
+    </div>`).join('');
+}
+
+function renderTrend() {
+  const svg = document.getElementById('trend');
+  const pts = [530,520,45,395,370,370,350,330];
+  const W=400,H=90,P=20;
+  const coords = pts.map((v,i)=>[P+i*(W-P*2)/7, H-P-(v/600)*(H-P*2)]);
+  const path = coords.map((c,i)=>(i?'L':'M')+c[0]+','+c[1]).join(' ');
+  svg.innerHTML = `
+    <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8473f" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#e8473f" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${path} L${coords[7][0]},${H} L${coords[0][0]},${H} Z" fill="url(#g1)"/>
+    <path d="${path}" fill="none" stroke="#e8473f" stroke-width="2.5" stroke-linejoin="round"/>
+    ${coords.map((c,i)=>`
+      <circle cx="${c[0]}" cy="${c[1]}" r="4" fill="${i===7?'#e8473f':'white'}" stroke="#e8473f" stroke-width="2"/>
+      <text x="${c[0]}" y="${c[1]-8}" text-anchor="middle" font-size="9" fill="#6b6b6b">${Math.round(pts[i]/10)}万</text>
+    `).join('')}
+    <line x1="${P}" y1="${H}" x2="${W-P}" y2="${H}" stroke="#e2e0d8"/>`;
+}
+
+function renderSim() {
+  const svg = document.getElementById('sim');
+  const kikin = [1026,970,900,820,730,630,510,400,350];
+  const saiken = [192,210,235,270,310,350,380,400,410];
+  const W=400,H=90,P=20;
+  const maxV=1200;
+  const kCoords = kikin.map((v,i)=>[P+i*(W-P*2)/8, H-P-(v/maxV)*(H-P*2)]);
+  const sCoords = saiken.map((v,i)=>[P+i*(W-P*2)/8, H-P-(v/maxV)*(H-P*2)]);
+  const kPath = kCoords.map((c,i)=>(i?'L':'M')+c[0]+','+c[1]).join(' ');
+  const sPath = sCoords.map((c,i)=>(i?'L':'M')+c[0]+','+c[1]).join(' ');
+  svg.innerHTML = `
+    <path d="${kPath}" fill="none" stroke="#1a5276" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="${sPath}" fill="none" stroke="#e8473f" stroke-width="2" stroke-linejoin="round" stroke-dasharray="4,3"/>
+    ${kCoords.map((c,i)=>`<circle cx="${c[0]}" cy="${c[1]}" r="3" fill="#1a5276"/>`).join('')}
+    ${sCoords.map((c,i)=>`<circle cx="${c[0]}" cy="${c[1]}" r="3" fill="#e8473f"/>`).join('')}
+    <text x="${P}" y="12" font-size="9" fill="#1a5276">━ 基金（貯金）</text>
+    <text x="${P+80}" y="12" font-size="9" fill="#e8473f">- - 区債（借金）</text>
+    <line x1="${P}" y1="${H}" x2="${W-P}" y2="${H}" stroke="#e2e0d8"/>`;
+}
+
+function renderMatrix() {
+  const svg = document.getElementById('matrix');
+  const items = [
+    {n:"学童",x:200,y:55,r:16,c:"#e8473f"},{n:"図書館",x:105,y:130,r:13,c:"#1a5276"},
+    {n:"保育園",x:215,y:110,r:15,c:"#117a65"},{n:"いこいの家",x:80,y:75,r:11,c:"#d4ac0d"},
+    {n:"公民館",x:155,y:140,r:12,c:"#7d3c98"},
+  ];
+  svg.innerHTML = `
+    <rect width="300" height="180" fill="#f9f9f7" rx="4"/>
+    <line x1="150" y1="10" x2="150" y2="170" stroke="#ddd" stroke-dasharray="3,3"/>
+    <line x1="10" y1="90" x2="290" y2="90" stroke="#ddd" stroke-dasharray="3,3"/>
+    <text x="152" y="20" font-size="8" fill="#999">高コスト</text>
+    <text x="152" y="172" font-size="8" fill="#999">低コスト</text>
+    <text x="12" y="88" font-size="8" fill="#999">低利用</text>
+    <text x="248" y="88" font-size="8" fill="#999">高利用</text>
+    ${items.map(s=>`
+      <circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${s.c}" fill-opacity="0.85"/>
+      <text x="${s.x}" y="${s.y+4}" text-anchor="middle" font-size="8.5" fill="white" font-weight="700">${s.n}</text>
+    `).join('')}`;
+}
+
+function switchLayer(n, el) {
+  [1,2,3].forEach(i => document.getElementById('L'+i).style.display = i===n?'block':'none');
+  document.querySelectorAll('.layer-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  if(n===2){ renderTrend(); renderSim(); }
+  if(n===3){ renderMatrix(); }
+}
+
+const SYSTEM = `あなたは「財政ナビ-AIひろこ先生」という自治体財政の専門AIです。365日いつでも市民の財政の質問に、わかりやすく答えます。
+
+【データ（デモ用ダミー）】
+■Layer1 財政健全度（23区比較）
+目黒区:健全度88点(2位), 港区:95点(1位), 文京区:92点, 渋谷区:85点, 世田谷区:78点
+実質赤字比率・連結実質赤字比率・実質公債費比率・将来負担比率すべて目黒区は健全圏内
+
+■Layer1 基金残高（貯金）vs 区債残高（借金）
+目黒区:基金989億円・区債192億円（貯金が借金の5倍以上）
+港区:基金1200億円超, 世田谷区:基金520億円, 新宿区:基金380億円
+
+■Layer2 吉田方式 将来の税金（1人あたり）
+2016年:53万→2018年:4.5万(急落)→2023年:33万(改善傾向)
+就任時比較▼12%改善。ただしPB5年連続赤字、基金989億円が施設更新で今後急減見込み
+
+■Layer2 基金・区債シミュレーター予測
+基金:2026年1026億→2034年350億（施設更新で急減）
+区債:2026年192億→2034年410億（施設更新借入で増加）
+2031年頃に基金と区債が逆転する見込み。危機ラインは基金104億円
+
+■Layer3 行政サービス別1人あたりフルコスト（23区比較）
+学童保育:目黒区63万円(2位), 渋谷区67万円(1位), 港区61万円
+図書館:渋谷区40万円(1位), 目黒区22万円(5位・効率的)
+保育園コスト内訳:人件費58%(平均52%), 物件費22%, 委託料15%
+
+【回答ルール】
+必ずJSON形式のみで返す: {"message":"回答文","layer":1か2か3,"highlight":""}
+layer: 横比較・健全度=1, 将来の税金・シミュレーター=2, サービスコスト=3
+3〜4文、数字必須、専門用語を使わない平易な日本語
+最後は「他に気になることはありますか？」で締める`;
+
+let history = [], busy = false;
+
+function ask(el) { document.getElementById('inp').value = el.textContent; send(); }
+
+async function send() {
+  const inp = document.getElementById('inp');
+  const text = inp.value.trim();
+  if(!text || busy) return;
+  inp.value = '';
+  addMsg('u', text);
+  busy = true;
+  document.getElementById('sbtn').disabled = true;
+
+  const c = document.getElementById('msgs');
+  const td = document.createElement('div');
+  td.className='msg a'; td.id='typing';
+  td.innerHTML='<div class="bubble"><div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div></div>';
+  c.appendChild(td); c.scrollTop=c.scrollHeight;
+
+  history.push({role:'user', content: text});
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:1000, system:SYSTEM, messages:history })
+    });
+    const data = await res.json();
+    if(data.error) throw new Error(JSON.stringify(data.error));
+    const raw = data.content[0].text;
+    history.push({role:'assistant', content: raw});
+
+    let parsed;
+    try { parsed = JSON.parse(raw.replace(/```json|```/g,'').trim()); }
+    catch(e) { parsed = {message:raw, layer:1}; }
+
+    document.getElementById('typing')?.remove();
+    const notes = {1:'Layer 1（横比較）を確認', 2:'Layer 2（将来の税金）を確認', 3:'Layer 3（コスト分析）を確認'};
+    addMsg('a', parsed.message, notes[parsed.layer]||'');
+    if(parsed.layer) switchLayer(parsed.layer, document.querySelectorAll('.layer-tab')[parsed.layer-1]);
+
+  } catch(e) {
+    document.getElementById('typing')?.remove();
+    addMsg('a', 'エラー: ' + e.message);
+  }
+  busy=false;
+  document.getElementById('sbtn').disabled=false;
+}
+
+function addMsg(role, text, note='') {
+  const c = document.getElementById('msgs');
+  const d = document.createElement('div');
+  d.className='msg '+role;
+  d.innerHTML=`<div class="bubble">${text}${note?`<br><span class="hl-note">📊 ${note}</span>`:''}</div><div class="msg-who">${role==='u'?'あなた':'財政ナビ-AIひろこ先生'}</div>`;
+  c.appendChild(d); c.scrollTop=c.scrollHeight;
+}
+
+renderBar('kenzen', kenzenData, '点');
+renderBar('kikin', kikinData, '億円');
+renderBar('gakudo', gakudoData, '万円');
+</script>
+</body>
+</html>
